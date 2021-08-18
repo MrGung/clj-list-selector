@@ -14,3 +14,7 @@ pom.xml.asc
 /.repl
 *.log
 /.env
+.idea/
+node_modules/
+.shadow-cljs/
+/script.js
