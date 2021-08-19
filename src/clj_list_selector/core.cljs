@@ -1,7 +1,6 @@
 (ns clj-list-selector.core
   (:require
     [reagent.core :as r]
-    [reagent.dom :as d]
     ["ink" :refer [render Text Box useInput useApp]]))
 
 
