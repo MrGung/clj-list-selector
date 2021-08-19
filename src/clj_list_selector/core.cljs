@@ -7,6 +7,14 @@
 
 
 ;; TODO: to work as :key later on - assert that :display-name is unique for user-input
+;; Using a single ratom
+;; accessing parts of it (and getting re-rendered on change) via cursors
+;; --
+;; it seems it is not idomatic to pass the state-ratom around but rather to access it globally?
+;; https://stackoverflow.com/questions/38305198/clojurescript-reagent-pass-atoms-down-as-inputs-or-use-as-global-variables
+;; it seems - passing ratoms around make the components mroe reusable (not that it matters here)
+;; next step: re-frame
+;; https://day8.github.io/re-frame/flow-mechanics/#how-flow-happens-in-reagent
 (defonce state (r/atom (->> (iterate inc 1)
                          (map (fn [id] {:display-name (str "item " id) :selected false}))
                          (take 5)
@@ -15,18 +23,14 @@
                                            (assoc item :highlighted true)
                                            (assoc item :highlighted false)
                                            )))
-                         #_(map (fn [item] [(:display-name item) item]))
-                         #_(into {}))))
+                         ;; use vec instead of lazyseq, so that update-in, etc., works
+                         vec)))
 
-(defn update-selected [state item-key]
-  (update-in state [item-key :selected] not))
 
 (defn toggle-selection [state item-index]
-  (println item-index)
-  (swap! state #(update % item-index (comp not :selected))))
+  (swap! state update-in [item-index :selected] not))
 (defn toggle-highlighted [state item-index]
-  (println item-index)
-  (swap! state #(update % item-index (comp not :highlighted))))
+  (swap! state update-in [item-index :highlighted] not))
 
 
 ;; change state to see effects...
@@ -35,26 +39,30 @@
     (js/setTimeout #(toggle-selection state i) (* n i 33))))
 
 
+;; giving an alias to the react-hook
 (def <-input useInput)
 
 
 (defn find-highlighted-index-item [state]
-  (let [index-item (first (keep-indexed (fn [index item] (:hightlighted item)) @state))]
+  (let [index-item-of-highlighted (fn [index item] (when (:highlighted item) [index item]))
+        index-item (first (keep-indexed index-item-of-highlighted @state))]
     index-item))
 
 (defn highlight-next-item [state]
   (let [[index item] (find-highlighted-index-item state)
         new-index (mod (inc index) (count @state))]
     (toggle-highlighted state index)
-    (toggle-highlighted state new-index)
-    nil))
+    (toggle-highlighted state new-index)))
 
 (defn highlight-prev-item [state]
   (let [[index item] (find-highlighted-index-item state)
         new-index (mod (dec index) (count @state))]
     (toggle-highlighted state index)
-    (toggle-highlighted state new-index)
-    nil))
+    (toggle-highlighted state new-index)))
+
+(defn toggle-selected-on-highlighted-item [state]
+  (let [[index _] (find-highlighted-index-item state)]
+    (toggle-selection state index)))
 
 
 ;; TODO use Form-2-Components:
@@ -70,17 +78,22 @@
 ;; for interop with React-libraries: :> (r/create-class)
 (defn app []
   (let [exit (useApp)]
+    ;; the input-hook stands alone - no value - no assignment
+    (println exit)
     (<-input (fn [input key]
                (cond
-                 (.-escape key) (println "exit")            ; (exit)
-                 ;;(.-downArrow key) (println "down")         ;(highlight-next-item state)
-                 ;;(.-upArrow key) (println "up")             ; (highlight-prev-item state)
-                 (.-return key) (println "return") #_(swap! @state #(update % :selected not)))))
+                 ;; accessing JS-properties with `.-{property}` syntax
+                 (.-escape key) (.-exit exit)
+                 (.-downArrow key) (highlight-next-item state)
+                 (.-upArrow key) (highlight-prev-item state)
+                 (.-return key) (toggle-selected-on-highlighted-item state))))
     [:> Box {:flexDirection "column" :borderStyle "round" :width 20 :paddingX 1}
      (doall
-       (for [item-state @state
-             :let [key (:display-name item-state)]]
-         ^{:key key} [list-entry (r/cursor state [key])]))]))
+       (map-indexed
+         (fn [index item-state]
+           ^{:key (:display-name item-state)} [list-entry (r/cursor state [index])])
+         ;; TODO get rid of the deref 'inside' the component.
+         @state))]))
 
 
 
