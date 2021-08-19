@@ -79,11 +79,10 @@
 (defn app []
   (let [exit (useApp)]
     ;; the input-hook stands alone - no value - no assignment
-    (println exit)
     (<-input (fn [input key]
                (cond
                  ;; accessing JS-properties with `.-{property}` syntax
-                 (.-escape key) (.-exit exit)
+                 (.-escape key) ((.-exit exit))
                  (.-downArrow key) (highlight-next-item state)
                  (.-upArrow key) (highlight-prev-item state)
                  (.-return key) (toggle-selected-on-highlighted-item state))))
